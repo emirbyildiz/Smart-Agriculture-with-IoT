@@ -1,0 +1,79 @@
+#define ntw_name "WIFINAME" 
+#define ntw_pass "PASSWORD"
+#define IP "184.106.153.149"    //thingspeak.com IP address
+#include <dht11.h>      // DHT11 library
+float temperature;
+ #define DHT11PIN 2     //defining DHT pin
+ #define LDR_Pin A0           // defining pin A1 as input pin for LDR voltage divider
+#define moisture_pin A1
+#define motorPin 6
+dht11 DHT11;
+ int ldr;
+ int sensor_value;
+int LDRReading;
+int shumidity;
+void setup()
+{
+  Serial.begin(115200); //We are initializing the serial port,as our ESP module works at 115200 baudrate we are initializing accordingly
+  
+  Serial.println("AT"); //We are testing the connection in the ESP module.
+  
+  delay(3000); //We are waiting 3 seconds to communicate with ESP module.
+ analogReference(INTERNAL);
+  if(Serial.find("OK")){         //If we are connected to the ESP module the module gives "OK" response to the "AT" command. 
+     Serial.println("AT+CWMODE=1"); //We are setting the WiFi mod of our ESP to STA so that we can connect another networks.
+     delay(2000);
+     String networkCom=String("AT+CWJAP=\"")+ntw_name+"\",\""+ntw_pass+"\"";
+    Serial.println(networkCom);
+    
+     delay(5000);
+ }
+}
+ 
+void loop(){
+ 
+  int chk = DHT11.read(DHT11PIN);
+    int humid = DHT11.humidity;
+    int temperature = DHT11.temperature;
+    sensor_value=analogRead(moisture_pin);
+    shumidity=map(sensor_value,0,1023,127,0);    
+    int soil_humidity = shumidity;
+ LDRReading = analogRead(LDR_Pin);
+  ldr = map(LDRReading,0,950,0,100);
+ Serial.println(String("AT+CIPSTART=\"TCP\",\"") + IP + "\",80");  //We are using this code to connect to thingspeak server.
+                                                                   //AT+CIPSTART with this command we are asking permission to connect to server. 
+                                                                   //TCP is the connection type that we are going to use. 80 is the port that we are going to connect.
+ delay(1000);
+  if(Serial.find("Error")){     //If we can not connect to the server the ESP module gives us an "Error" message 
+   Serial.println("AT+CIPSTART Error");
+    return;
+  }
+  
+ String com_tbsend = "GET /update?key=5MV2E6OOVOHW5W8X&field1=";   // here 64T0OS3R1OEAYUML is the key that we took from API key. You are going to implement your key here. 
+ com_tbsend += String(temperature); //Here we are assigning our temperature variable to float and adding it to com_tbsend
+  com_tbsend +="&field2=";
+  com_tbsend += String(humid);
+    com_tbsend +="&field3=";
+  com_tbsend += String(shumidity);
+  com_tbsend +="&field4=";
+  com_tbsend += String(ldr);
+
+ com_tbsend += "\r\n\r\n";                                             // we need to use /r/n(Enter) command to communicate with our ESP module in a serial way.
+  delay(3000);                                                     
+ 
+ Serial.print("AT+CIPSEND=");                    //We are using this command when we are sending data. To use this command we need to specify the number of characters that we are sending. 
+ Serial.println(com_tbsend.length()+2);       // we are using length() command to find the number of characters in com_tbsend
+ 
+ delay(1000);
+ 
+ if(Serial.find(">")){                           //If we can connect the server and see the lenght of the command our ESP module send us a ">" sign.
+                                                 //  When arduino sees the ">" sign, it sends the temperature data to thingspeak via ESP module.
+ Serial.print(com_tbsend);
+ Serial.print("\r\n\r\n");
+ }
+ else{
+ Serial.println("AT+CIPCLOSE");
+ }
+ //  wait for 1 minute for the updates.
+ delay(2000);
+}
